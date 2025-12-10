@@ -25,11 +25,9 @@ COORD_PORT = 8888
 
 
 def hmac_password(username, password):
-    """Gera HMAC da senha para autenticação de usuário."""
     return hmac.new(username.encode(), password.encode(), hashlib.sha256).hexdigest()
 
 def receive_full_pem(sock):
-    """Recebe dados do socket até encontrar o terminador PEM."""
     buffer = b""
     terminator = b"-----END PUBLIC KEY-----" 
     sock.settimeout(5.0) 
@@ -49,7 +47,6 @@ def receive_full_pem(sock):
     return buffer
 
 def perform_key_exchange(sock, is_initiator):
-    """executa a troca de chaves ECDH (Elliptic Curve Diffie-Hellman)."""
     global SECRET_KEY
 
     my_private_key = ec.generate_private_key(ECDH_CURVE, default_backend()) 
@@ -92,9 +89,7 @@ def perform_key_exchange(sock, is_initiator):
     print("troca ECDH concluída! chave secreta compartilhada estabelecida.")
     return True
 
-def authenticate_peer(sock, my_user, my_pass, is_initiator):
-    """Executa a autenticação mútua (mTLS CN + Login HMAC)."""
-    
+def authenticate_peer(sock, my_user, my_pass, is_initiator):    
     try:
         peer_cert = sock.getpeercert()
         if not peer_cert:
