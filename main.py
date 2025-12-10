@@ -23,9 +23,6 @@ COORD_IP = '127.0.0.1'
 COORD_PORT = 8888 
 
 
-def hmac_password(username, password):
-    return hmac.new(username.encode(), password.encode(), hashlib.sha256).hexdigest()
-
 def receive_full_pem(sock):
     buffer = b""
     terminator = b"-----END PUBLIC KEY-----" 
@@ -108,7 +105,6 @@ def authenticate_peer(sock, my_user, my_pass, is_initiator):
         
     
 def send_messages(sock):
-    """Envia mensagens com HMAC para garantir integridade."""
     global SECRET_KEY
     if not SECRET_KEY:
         return
@@ -123,7 +119,6 @@ def send_messages(sock):
             pass
 
 def receive_messages(sock):
-    """Recebe mensagens e verifica HMAC para garantir integridade, com tratamento de erros."""
     global SECRET_KEY
     if not SECRET_KEY:
         return
@@ -156,7 +151,6 @@ def receive_messages(sock):
 
 
 def start_p2p_listener(my_user, my_pass):
-    """Inicia o listener P2P para aceitar conexões entrantes."""
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.check_hostname = False
     context.verify_mode = ssl.CERT_REQUIRED
