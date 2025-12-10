@@ -301,13 +301,13 @@ def coordinate_and_chat(my_user, my_pass):
                     print(f"tentando iniciar chat P2P seguro com {target_user}...")
                     
                     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH) 
-                    context.check_hostname = False
+                    context.check_hostname = True
                     context.verify_mode = ssl.CERT_REQUIRED
                     context.load_verify_locations(cafile="ca_cert.pem")
                     context.load_cert_chain(certfile=f"{my_user}_cert.pem", keyfile=f"{my_user}_key.pem")
 
                     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    client = context.wrap_socket(client, server_hostname='localhost') 
+                    client = context.wrap_socket(client, server_hostname=target_user) 
                     
                     try:
                         client.connect((target_ip, target_port)) 
