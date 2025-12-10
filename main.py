@@ -150,7 +150,7 @@ def receive_messages(sock):
             break
 
 
-def start_p2p_listener(my_user, my_pass):
+def start_p2p_listener(my_user, my_pass, p2p_port):
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.check_hostname = False
     context.verify_mode = ssl.CERT_REQUIRED
@@ -159,9 +159,9 @@ def start_p2p_listener(my_user, my_pass):
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(('0.0.0.0', P2P_PORT))
+    server.bind(('0.0.0.0', p2p_port))
     server.listen()
-    print(f"Servidor P2P de {my_user} escutando na porta {P2P_PORT}...")
+    print(f"Servidor P2P de {my_user} escutando na porta {p2p_port}...")
 
     try:
         conn, addr = server.accept()
@@ -188,11 +188,11 @@ def start_p2p_listener(my_user, my_pass):
         return
 
 
-def coordinate_and_chat(my_user, my_pass):
+def coordinate_and_chat(my_user, my_pass, p2p_port):
     current_user = my_user
     current_pass = my_pass
 
-    threading.Thread(target=start_p2p_listener, args=(my_user, my_pass), daemon=True).start()
+    threading.Thread(target=start_p2p_listener, args=(my_user, my_pass, p2p_port), daemon=True).start()
 
     while True:
         coord_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -203,7 +203,7 @@ def coordinate_and_chat(my_user, my_pass):
             time.sleep(5)
             continue
 
-        login_msg = f"LOGIN|{current_user}|{current_pass}|{P2P_PORT}" 
+        login_msg = f"LOGIN|{current_user}|{current_pass}|{p2p_port}" 
         coord_sock.send(login_msg.encode())
         
         try:
@@ -290,7 +290,7 @@ def coordinate_and_chat(my_user, my_pass):
                     try:
                         client.connect((target_ip, target_port)) 
                     except ConnectionRefusedError:
-                        print(f"erro: O peer {target_user} não está escutando na porta {P2P_PORT}.")
+                        print(f"erro: O peer {target_user} não está escutando na porta {target_port}.")
                         client.close()
                         continue
                         
@@ -341,7 +341,12 @@ if __name__ == '__main__':
     my_user = input("Seu usuário: ").strip()
     my_pass = input("Sua senha: ").strip()
     
-    coordinate_and_chat(my_user, my_pass)
-
+    try:
+        p2p_port = int(input("Porta P2P (Ex: 9999 para Alice, 9998 para Bob): ").strip())
+    except ValueError:
+        print("Porta inválida. Encerrando.")
+        sys.exit(1)
+        
+    coordinate_and_chat(my_user, my_pass, p2p_port)
     while True:
         time.sleep(1)
