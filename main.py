@@ -241,8 +241,6 @@ def start_p2p_listener(my_user, my_pass):
 
 
 def coordinate_and_chat(my_user, my_pass):
-    """Lida com login no servidor central, obtém lista e inicia chat P2P."""
-    
     threading.Thread(target=start_p2p_listener, args=(my_user, my_pass), daemon=True).start()
 
     coord_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -278,15 +276,16 @@ def coordinate_and_chat(my_user, my_pass):
                 break
                 
             _, json_list = data.split("|", 1)
-            available_users = json.loads(json_list)
+            available_users_data = json.loads(json_list)
             
-            if not available_users:
+            if not available_users_data:
                 print("\nNenhum outro usuário online. (Aguardando conexões...)")
                 time.sleep(5) 
                 continue
                 
             print("\n--- USUÁRIOS ONLINE ---")
-            for i, user in enumerate(available_users):
+            available_users_names = list(available_users_data.keys())
+            for i, user in enumerate(available_users_names):
                 print(f"{i+1}: {user}")
             
             choice = input("Digite o número do usuário para iniciar o chat ou (R) para Recarregar: ").strip().upper()
@@ -297,8 +296,12 @@ def coordinate_and_chat(my_user, my_pass):
                 
             if choice.isdigit():
                 user_index = int(choice) - 1
-                if 0 <= user_index < len(available_users):
-                    target_user = available_users[user_index]
+                if 0 <= user_index < len(available_users_names):
+                    target_user = available_users_names[user_index]
+
+                    target_info = available_users_data[target_user]
+                    target_ip = target_info["ip"]
+                    target_port = target_info["port"]
                     
                     print(f"tentando iniciar chat P2P seguro com {target_user}...")
                     
@@ -312,7 +315,7 @@ def coordinate_and_chat(my_user, my_pass):
                     client = context.wrap_socket(client, server_hostname='localhost') 
                     
                     try:
-                        client.connect(('127.0.0.1', P2P_PORT)) 
+                        client.connect((target_ip, target_port)) 
                     except ConnectionRefusedError:
                         print(f"erro: O peer {target_user} não está escutando na porta {P2P_PORT}.")
                         client.close()

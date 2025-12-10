@@ -37,8 +37,14 @@ def handle_client(conn, addr):
                         break 
                     
                     if data == "GET_LIST":
-                        user_list = [user for user in ACTIVE_USERS if user != username]
-                        conn.send(f"LIST|{json.dumps(user_list)}".encode())
+                        users_to_send = {}
+                        for user, info in ACTIVE_USERS.items():
+                            if user != username:
+                                users_to_send[user] = {
+                                    "ip": info[0],
+                                    "port": info[1]
+                                }
+                        conn.send(f"LIST|{json.dumps(users_to_send)}".encode())
                     
                     elif data == "QUIT":
                         break 
