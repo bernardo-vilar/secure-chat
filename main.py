@@ -12,7 +12,6 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
 
-USERS = {"alice": "1234", "bob": "abcd"} 
 SECRET_KEY = None 
 ECDH_CURVE = ec.SECP384R1()
 
@@ -99,54 +98,14 @@ def authenticate_peer(sock, my_user, my_pass, is_initiator):
         peer_cn_info = [i[0][1] for i in peer_cert['subject'] if i[0][0] == 'commonName']
         peer_user_cert = peer_cn_info[0] if peer_cn_info else None
 
-        if peer_user_cert not in USERS:
-            print(f" falha: Usuário do certificado ({peer_user_cert}) desconhecido no sistema.")
-            return False
-
         print(f" Processo autenticado via mTLS. Usuário esperado: **{peer_user_cert}**.")
+
+        return True
 
     except Exception as e:
         print(f" Erro Crítico na Autenticação (Certificado): {e}")
         return False
         
-    my_hmac = hmac_password(my_user, my_pass)
-    
-    if is_initiator:
-        sock.send(f"{my_user}|{my_hmac}".encode())
-        data = sock.recv(1024).decode()
-    else:
-        data = sock.recv(1024).decode()
-        sock.send(f"{my_user}|{my_hmac}".encode())
-
-    try:
-        peer_login_user, peer_login_hmac = data.split("|")
-        
-        if peer_login_user != peer_user_cert:
-            print(f" falha de Autentidade: Login ({peer_login_user}) não corresponde ao certificado ({peer_user_cert}).")
-            sock.send(b"FAIL_CN_MISMATCH")
-            return False
-
-        expected_hmac = hmac_password(peer_user_cert, USERS.get(peer_user_cert, ""))
-        
-        if hmac.compare_digest(peer_login_hmac, expected_hmac):
-            sock.send(b"OK")
-            print(f"usuário **{peer_user_cert}** autenticado com sucesso (Login/HMAC).")
-        else:
-            sock.send(b"FAIL_HMAC")
-            print(f"falha na Autenticação do Usuário: Senha inválida para {peer_user_cert}")
-            return False
-            
-    except Exception as e:
-        print(" erro no protocolo de Login:", e)
-        return False
-
-    if is_initiator:
-        resp = sock.recv(1024).decode()
-        if resp != "OK":
-            print(f"O peer respondeu com falha final: {resp}")
-            return False
-        
-    return True
     
 def send_messages(sock):
     """Envia mensagens com HMAC para garantir integridade."""
@@ -236,25 +195,50 @@ def start_p2p_listener(my_user, my_pass):
 
 
 def coordinate_and_chat(my_user, my_pass):
+    current_user = my_user
+    current_pass = my_pass
+
     threading.Thread(target=start_p2p_listener, args=(my_user, my_pass), daemon=True).start()
 
-    coord_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        coord_sock.connect((COORD_IP, COORD_PORT))
-    except ConnectionRefusedError:
-        print(f"erro: Servidor de Coordenação não está rodando em {COORD_IP}:{COORD_PORT}")
-        return
+    while True:
+        coord_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            coord_sock.connect((COORD_IP, COORD_PORT))
+        except ConnectionRefusedError:
+            print(f"erro: Servidor de Coordenação não está rodando em {COORD_IP}:{COORD_PORT}")
+            time.sleep(5)
+            continue
 
-    login_msg = f"LOGIN|{my_user}|{my_pass}|{P2P_PORT}" 
-    coord_sock.send(login_msg.encode())
-    
-    response = coord_sock.recv(1024).decode()
-    if not response.startswith("OK"):
-        print(f"falha no login de coordenação: {response}")
-        coord_sock.close()
-        return
+        login_msg = f"LOGIN|{current_user}|{current_pass}|{P2P_PORT}" 
+        coord_sock.send(login_msg.encode())
         
-    print(f"conectado ao Servidor de Coordenação. Usuário **{my_user}** ONLINE.")
+        try:
+            coord_sock.settimeout(5)
+            response = coord_sock.recv(1024).decode()
+        except socket.timeout:
+            print("Erro: Timeout ao receber resposta do Servidor de Coordenação.")
+            coord_sock.close()
+            time.sleep(2)
+            continue
+                
+        if response.startswith("OK"):
+            print(f"Conectado ao Servidor de Coordenação. Usuário **{current_user}** ONLINE.")
+            break 
+        else:
+            print(f"Falha no login de coordenação: {response}")
+            coord_sock.close()
+            
+            retry = input("Deseja tentar login novamente com novas credenciais? (S/N): ").strip().upper()
+            if retry != 'S':
+                print("Encerrando cliente.")
+                return 
+            
+            current_user = input("Novo usuário: ").strip()
+            current_pass = input("Nova senha: ").strip()
+            
+            continue
+
+    coord_sock.settimeout(None)
     while True:
         if P2P_IS_CONNECTED.is_set():
             print("\nHost: Conexão P2P estabelecida. Desconectando da Coordenação.")
@@ -304,7 +288,7 @@ def coordinate_and_chat(my_user, my_pass):
                     context.check_hostname = True
                     context.verify_mode = ssl.CERT_REQUIRED
                     context.load_verify_locations(cafile="ca_cert.pem")
-                    context.load_cert_chain(certfile=f"{my_user}_cert.pem", keyfile=f"{my_user}_key.pem")
+                    context.load_cert_chain(certfile=f"{current_user}_cert.pem", keyfile=f"{current_user}_key.pem")
 
                     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     client = context.wrap_socket(client, server_hostname=target_user) 
@@ -316,7 +300,7 @@ def coordinate_and_chat(my_user, my_pass):
                         client.close()
                         continue
                         
-                    if not authenticate_peer(client, my_user, my_pass, is_initiator=False):
+                    if not authenticate_peer(client, current_user, current_pass, is_initiator=False):
                         client.close()
                         continue
                         
